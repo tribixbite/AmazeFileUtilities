@@ -233,17 +233,6 @@ class MainActivity :
 
         if (!didShowWelcomeScreen) {
             UpdateChecker.checkForAppUpdates(this)
-            viewModel.getUniqueId().observe(this) {
-                deviceId ->
-                if (deviceId != null) {
-                    viewModel.checkInternetConnection(30000).observe(this) {
-                        viewModel.validateTrial(deviceId, it) {
-                            trialResponse ->
-                            handleValidateTrial(trialResponse)
-                        }
-                    }
-                }
-            }
             UpdateChecker.shouldRateApp(this)
         } else {
             // add install time in preferences
@@ -462,81 +451,6 @@ class MainActivity :
     private val documentsObserver = UriObserver(Handler()) {
         showToastInCenter("changes in documents")
     }*/
-
-    private fun handleValidateTrial(trialResponse: TrialValidationApi.TrialResponse) {
-        this@MainActivity.runOnUiThread {
-            if (trialResponse.subscriptionStatus
-                == Trial.SUBSCRIPTION_STATUS_DEFAULT
-            ) {
-                log.debug("user not subscribed {}", trialResponse)
-                if (trialResponse.isNotConnected) {
-                    val notConnectedCount = getAppCommonSharedPreferences()
-                        .getInt(PreferencesConstants.KEY_NOT_CONNECTED_TRIAL_COUNT, 0)
-                    getAppCommonSharedPreferences().edit()
-                        .putInt(
-                            PreferencesConstants.KEY_NOT_CONNECTED_TRIAL_COUNT,
-                            notConnectedCount + 1
-                        ).apply()
-                    if (notConnectedCount > PreferencesConstants.VAL_THRES_NOT_CONNECTED_TRIAL) {
-                        showAboutActivity(false, false, true)
-                    }
-                    log.warn("internet not connected count $notConnectedCount")
-                } else {
-                    getAppCommonSharedPreferences().edit()
-                        .putInt(PreferencesConstants.KEY_NOT_CONNECTED_TRIAL_COUNT, 0).apply()
-                    getAppCommonSharedPreferences().edit()
-                        .putInt(PreferencesConstants.KEY_NOT_CONNECTED_SUBSCRIBED_COUNT, 0).apply()
-                    when (trialResponse.getTrialStatusCode()) {
-                        TrialValidationApi.TrialResponse.TRIAL_ACTIVE -> {
-                            // check if it's first day or last day
-                            if (trialResponse.isNewSignup) {
-                                Utils.buildTrialStartedDialog(
-                                    this,
-                                    trialResponse.trialDaysLeft
-                                ).create().show()
-                            } else if (trialResponse.isLastDay) {
-                                Utils.buildLastTrialDayDialog(this) {
-                                    // wants to subscribe
-                                    Billing.getInstance(
-                                        this
-                                    )?.initiatePurchaseFlow()
-                                }.create().show()
-                            }
-                        }
-                        TrialValidationApi.TrialResponse.TRIAL_EXPIRED,
-                        TrialValidationApi.TrialResponse.TRIAL_UNOFFICIAL -> {
-                            showAboutActivity(true, false, false)
-                        }
-                        TrialValidationApi.TrialResponse.TRIAL_INACTIVE -> {
-                            showAboutActivity(false, true, false)
-                        }
-                    }
-                }
-            } else {
-                log.debug("user subscribed {}", trialResponse)
-                if (trialResponse.isNotConnected) {
-                    val notConnectedCount = getAppCommonSharedPreferences()
-                        .getInt(PreferencesConstants.KEY_NOT_CONNECTED_SUBSCRIBED_COUNT, 0)
-                    getAppCommonSharedPreferences().edit()
-                        .putInt(
-                            PreferencesConstants.KEY_NOT_CONNECTED_SUBSCRIBED_COUNT,
-                            notConnectedCount + 1
-                        ).apply()
-                    if (notConnectedCount > PreferencesConstants
-                        .VAL_THRES_NOT_CONNECTED_SUBSCRIBED
-                    ) {
-                        showAboutActivity(false, false, true)
-                    }
-                    log.warn("subscribed and internet not connected count $notConnectedCount")
-                } else {
-                    getAppCommonSharedPreferences().edit()
-                        .putInt(PreferencesConstants.KEY_NOT_CONNECTED_TRIAL_COUNT, 0).apply()
-                    getAppCommonSharedPreferences().edit()
-                        .putInt(PreferencesConstants.KEY_NOT_CONNECTED_SUBSCRIBED_COUNT, 0).apply()
-                }
-            }
-        }
-    }
 
     private fun getFragmentAtFrame(): Fragment? {
         return supportFragmentManager.findFragmentById(R.id.nav_host_fragment_activity_main)
